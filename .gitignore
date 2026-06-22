@@ -7,6 +7,8 @@ yarn-error.log*
 # Runtime databases
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Next.js build output
 frontend/.next/
