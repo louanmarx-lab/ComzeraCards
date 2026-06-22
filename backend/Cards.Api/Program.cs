@@ -23,7 +23,12 @@ namespace Cards.Api
             var builder = WebApplication.CreateBuilder(args);
 
             // Configure SQLite Database path
-            var dbPath = Path.Combine(builder.Environment.ContentRootPath, "cards.db");
+            var dbPath = Environment.GetEnvironmentVariable("DATABASE_PATH") ?? Path.Combine(builder.Environment.ContentRootPath, "cards.db");
+            var dbDir = Path.GetDirectoryName(dbPath);
+            if (!string.IsNullOrEmpty(dbDir) && !Directory.Exists(dbDir))
+            {
+                Directory.CreateDirectory(dbDir);
+            }
             builder.Services.AddDbContext<CardsDbContext>(options =>
                 options.UseSqlite($"Data Source={dbPath}"));
 
