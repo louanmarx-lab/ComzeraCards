@@ -1,18 +1,6 @@
 version: '3.8'
 
 services:
-  backend:
-    build:
-      context: ./backend/Cards.Api
-      dockerfile: Dockerfile
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - DATABASE_PATH=/app/data/cards.db
-      - Jwt__Key=SuperSecretSecureJwtKeyCardsComzeraSuperSecret
-    volumes:
-      - backend-data:/app/data
-    restart: always
-
   frontend:
     build:
       context: ./frontend
@@ -23,6 +11,18 @@ services:
       - NODE_ENV=production
     depends_on:
       - backend
+    restart: always
+
+  backend:
+    build:
+      context: ./backend/Cards.Api
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DATABASE_PATH=/app/data/cards.db
+      - Jwt__Key=SuperSecretSecureJwtKeyCardsComzeraSuperSecret
+    volumes:
+      - backend-data:/app/data
     restart: always
 
 volumes:
