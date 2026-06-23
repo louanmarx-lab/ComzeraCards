@@ -15,30 +15,13 @@ interface Organization {
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("Cardholder");
-  const [orgId, setOrgId] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [fullName, setFullName] = useState("");
   const [designation, setDesignation] = useState("");
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    // Fetch available companies
-    fetch(`${API_URL}/organizations`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setOrganizations(data);
-          if (data.length > 0) {
-            setOrgId(data[0].id.toString());
-          }
-        }
-      })
-      .catch((err) => console.error("Error fetching organizations", err));
-  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,8 +36,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email,
           password,
-          role,
-          organizationId: parseInt(orgId),
+          companyName,
           fullName,
           designation,
         }),
@@ -108,6 +90,20 @@ export default function RegisterPage() {
           )}
           <div className="space-y-3 rounded-md">
             <div>
+              <label htmlFor="companyName" className="block text-sm font-medium text-zinc-300">
+                Company Name
+              </label>
+              <input
+                id="companyName"
+                type="text"
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                placeholder="e.g. Acme Corporation"
+              />
+            </div>
+            <div>
               <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
                 Email Address
               </label>
@@ -136,70 +132,33 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-zinc-300">
-                Workspace Role
+              <label htmlFor="fullName" className="block text-sm font-medium text-zinc-300">
+                Your Full Name
               </label>
-              <select
-                id="role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-              >
-                <option value="Cardholder">Sales Rep / Cardholder</option>
-                <option value="SubsidiaryAdmin">Subsidiary Manager / Admin</option>
-                <option value="HoldingAdmin">Group / Holding Admin</option>
-              </select>
+              <input
+                id="fullName"
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                placeholder="John Doe"
+              />
             </div>
             <div>
-              <label htmlFor="org" className="block text-sm font-medium text-zinc-300">
-                Company / Subsidiary
+              <label htmlFor="designation" className="block text-sm font-medium text-zinc-300">
+                Job Title (Designation)
               </label>
-              <select
-                id="org"
-                value={orgId}
-                onChange={(e) => setOrgId(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-              >
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
+              <input
+                id="designation"
+                type="text"
+                required
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                placeholder="e.g. Managing Director"
+              />
             </div>
-
-            {role === "Cardholder" && (
-              <>
-                <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-zinc-300">
-                    Full Name
-                  </label>
-                  <input
-                    id="fullName"
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                    placeholder="John Doe"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="designation" className="block text-sm font-medium text-zinc-300">
-                    Designation (Job Title)
-                  </label>
-                  <input
-                    id="designation"
-                    type="text"
-                    required
-                    value={designation}
-                    onChange={(e) => setDesignation(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                    placeholder="Senior Sales Consultant"
-                  />
-                </div>
-              </>
-            )}
           </div>
 
           <div className="pt-2">

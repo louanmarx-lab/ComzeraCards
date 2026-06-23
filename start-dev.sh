@@ -58,10 +58,10 @@ echo -e "  ${GREEN}✓ Backend is running (PID: $BACKEND_PID)${NC}"
 echo ""
 
 # 2. Start Next.js Frontend
-echo -e "${BLUE}[2/2] Launching Next.js Frontend on http://localhost:3000...${NC}"
+echo -e "${BLUE}[2/2] Launching Next.js Frontend on http://localhost:3001...${NC}"
 export PATH="/Users/lou-anmarx/Comzera/Bizpro 5/node22/bin:$PATH"
 
-npm --prefix frontend run dev > frontend.log 2>&1 &
+PORT=3001 npm --prefix frontend run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
 
 echo -e "  ${GREEN}✓ Frontend dev server is running (PID: $FRONTEND_PID)${NC}"
@@ -69,7 +69,7 @@ echo ""
 
 echo -e "${CYAN}${BOLD}======================================================${NC}"
 echo -e "${GREEN}${BOLD}🎉 Both systems are up!${NC}"
-echo -e "  - Frontend: ${BOLD}http://localhost:3000${NC}"
+echo -e "  - Frontend: ${BOLD}http://localhost:3001${NC}"
 echo -e "  - Backend:  ${BOLD}http://localhost:5001/swagger${NC}"
 echo -e "${CYAN}Press [Ctrl+C] to stop both servers at any time.${NC}"
 echo -e "${CYAN}${BOLD}======================================================${NC}"

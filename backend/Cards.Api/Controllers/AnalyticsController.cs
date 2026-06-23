@@ -56,6 +56,21 @@ namespace Cards.Api.Controllers
                 tapsQuery = tapsQuery.Where(ta => ta.CardProfile.User.OrganizationId == orgId);
                 leadsQuery = leadsQuery.Where(l => l.CardProfile.User.OrganizationId == orgId);
             }
+            else if (roleClaim == "HoldingAdmin")
+            {
+                var userOrg = await _context.Organizations.FindAsync(orgId);
+                if (userOrg != null)
+                {
+                    var rootParentId = userOrg.ParentId ?? userOrg.Id;
+                    tapsQuery = tapsQuery.Where(ta => ta.CardProfile.User.OrganizationId == rootParentId || ta.CardProfile.User.Organization.ParentId == rootParentId);
+                    leadsQuery = leadsQuery.Where(l => l.CardProfile.User.OrganizationId == rootParentId || l.CardProfile.User.Organization.ParentId == rootParentId);
+                }
+                else
+                {
+                    tapsQuery = tapsQuery.Where(ta => ta.CardProfile.User.OrganizationId == orgId);
+                    leadsQuery = leadsQuery.Where(l => l.CardProfile.User.OrganizationId == orgId);
+                }
+            }
 
             int totalTaps = await tapsQuery.CountAsync();
             int totalLeads = await leadsQuery.CountAsync();

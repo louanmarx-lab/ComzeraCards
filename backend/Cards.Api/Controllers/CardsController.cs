@@ -32,6 +32,7 @@ namespace Cards.Api.Controllers
             public string NfcToken { get; set; } = string.Empty;
             public string Phone { get; set; } = string.Empty;
             public string Bio { get; set; } = string.Empty;
+            public string ProfileImageUrl { get; set; } = string.Empty;
             public int OrganizationId { get; set; }
         }
 
@@ -62,6 +63,19 @@ namespace Cards.Api.Controllers
             {
                 query = query.Where(cp => cp.User.OrganizationId == orgId);
             }
+            else if (roleClaim == "HoldingAdmin")
+            {
+                var userOrg = await _context.Organizations.FindAsync(orgId);
+                if (userOrg != null)
+                {
+                    var rootParentId = userOrg.ParentId ?? userOrg.Id;
+                    query = query.Where(cp => cp.User.OrganizationId == rootParentId || cp.User.Organization.ParentId == rootParentId);
+                }
+                else
+                {
+                    query = query.Where(cp => cp.User.OrganizationId == orgId);
+                }
+            }
 
             var profiles = await query
                 .OrderBy(cp => cp.FullName)
@@ -74,8 +88,10 @@ namespace Cards.Api.Controllers
                     email = cp.Email,
                     phone = cp.Phone,
                     bio = cp.Bio,
+                    profileImageUrl = cp.ProfileImageUrl,
                     isActive = cp.IsActive,
-                    organizationName = cp.User.Organization.Name
+                    organizationName = cp.User.Organization.Name,
+                    organizationId = cp.User.OrganizationId
                 })
                 .ToListAsync();
 
@@ -134,6 +150,7 @@ namespace Cards.Api.Controllers
                 Email = request.Email,
                 Phone = request.Phone,
                 Bio = request.Bio,
+                ProfileImageUrl = request.ProfileImageUrl,
                 SocialLinksJson = "{}",
                 IsActive = 1
             };
@@ -254,6 +271,22 @@ namespace Cards.Api.Controllers
             sb.AppendLine($"TEL;TYPE=CELL,VOICE:{profile.Phone}");
             sb.AppendLine($"EMAIL;TYPE=PREF,INTERNET:{profile.Email}");
             sb.AppendLine($"NOTE:{profile.Bio}");
+            
+            if (!string.IsNullOrEmpty(profile.ProfileImageUrl) && profile.ProfileImageUrl.StartsWith("data:image/"))
+            {
+                var commaIndex = profile.ProfileImageUrl.IndexOf(',');
+                if (commaIndex >= 0)
+                {
+                    var base64Data = profile.ProfileImageUrl.Substring(commaIndex + 1);
+                    var typePart = profile.ProfileImageUrl.Substring(0, commaIndex);
+                    string imageType = "JPEG";
+                    if (typePart.Contains("image/png")) imageType = "PNG";
+                    else if (typePart.Contains("image/gif")) imageType = "GIF";
+                    
+                    sb.AppendLine($"PHOTO;TYPE={imageType};ENCODING=b:{base64Data}");
+                }
+            }
+
             sb.AppendLine("END:VCARD");
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
@@ -288,6 +321,90 @@ namespace Cards.Api.Controllers
 
             await _context.SaveChangesAsync();
             return Ok(new { message = "Profile updated successfully." });
+        }
+
+        [Authorize]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCardProfile(int id, [FromBody] AdminUpdateProfileRequest request)
+        {
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var userOrgIdClaim = User.FindFirst("OrganizationId")?.Value;
+            
+            if (userRole != "HoldingAdmin" && userRole != "SubsidiaryAdmin")
+            {
+                return Forbid();
+            }
+
+            var profile = await _context.CardProfiles
+                .Include(cp => cp.User)
+                .FirstOrDefaultAsync(cp => cp.Id == id);
+
+            if (profile == null)
+            {
+                return NotFound(new { error = "Card profile not found." });
+            }
+
+            // Check organization context for isolation
+            if (int.TryParse(userOrgIdClaim, out var userOrgId))
+            {
+                if (userRole == "SubsidiaryAdmin")
+                {
+                    if (profile.User?.OrganizationId != userOrgId)
+                    {
+                        return Forbid();
+                    }
+                }
+                else if (userRole == "HoldingAdmin")
+                {
+                    var userOrg = await _context.Organizations.FindAsync(userOrgId);
+                    if (userOrg != null)
+                    {
+                        var rootParentId = userOrg.ParentId ?? userOrg.Id;
+                        var cardOrg = await _context.Organizations.FindAsync(profile.User?.OrganizationId);
+                        if (cardOrg == null || (cardOrg.Id != rootParentId && cardOrg.ParentId != rootParentId))
+                        {
+                            return Forbid();
+                        }
+                    }
+                    else
+                    {
+                        return Forbid();
+                    }
+                }
+            }
+
+            // Update associated User
+            if (profile.User != null)
+            {
+                profile.User.Email = request.Email;
+                profile.User.OrganizationId = request.OrganizationId;
+            }
+
+            profile.FullName = request.FullName;
+            profile.Designation = request.Designation;
+            profile.Email = request.Email;
+            profile.Phone = request.Phone;
+            profile.Bio = request.Bio;
+            profile.ProfileImageUrl = request.ProfileImageUrl;
+            profile.SocialLinksJson = request.SocialLinksJson;
+            profile.NfcToken = request.NfcToken;
+            profile.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Card profile updated successfully." });
+        }
+
+        public class AdminUpdateProfileRequest
+        {
+            public string FullName { get; set; } = string.Empty;
+            public string Designation { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string Phone { get; set; } = string.Empty;
+            public string Bio { get; set; } = string.Empty;
+            public string ProfileImageUrl { get; set; } = string.Empty;
+            public string SocialLinksJson { get; set; } = "{}";
+            public string NfcToken { get; set; } = string.Empty;
+            public int OrganizationId { get; set; }
         }
     }
 }

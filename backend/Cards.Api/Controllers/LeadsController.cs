@@ -90,7 +90,19 @@ namespace Cards.Api.Controllers
             {
                 query = query.Where(l => l.CardProfile.User.OrganizationId == orgId);
             }
-            // HoldingAdmin sees all, no filter needed
+            else if (roleClaim == "HoldingAdmin")
+            {
+                var userOrg = await _context.Organizations.FindAsync(orgId);
+                if (userOrg != null)
+                {
+                    var rootParentId = userOrg.ParentId ?? userOrg.Id;
+                    query = query.Where(l => l.CardProfile.User.OrganizationId == rootParentId || l.CardProfile.User.Organization.ParentId == rootParentId);
+                }
+                else
+                {
+                    query = query.Where(l => l.CardProfile.User.OrganizationId == orgId);
+                }
+            }
 
             var leadsList = await query
                 .OrderByDescending(l => l.CreatedAt)
@@ -136,6 +148,19 @@ namespace Cards.Api.Controllers
             else if (roleClaim == "SubsidiaryAdmin")
             {
                 query = query.Where(l => l.CardProfile.User.OrganizationId == orgId);
+            }
+            else if (roleClaim == "HoldingAdmin")
+            {
+                var userOrg = await _context.Organizations.FindAsync(orgId);
+                if (userOrg != null)
+                {
+                    var rootParentId = userOrg.ParentId ?? userOrg.Id;
+                    query = query.Where(l => l.CardProfile.User.OrganizationId == rootParentId || l.CardProfile.User.Organization.ParentId == rootParentId);
+                }
+                else
+                {
+                    query = query.Where(l => l.CardProfile.User.OrganizationId == orgId);
+                }
             }
 
             var leads = await query

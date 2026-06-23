@@ -32,8 +32,9 @@ namespace Cards.Api.Controllers
         {
             public string Email { get; set; } = string.Empty;
             public string Password { get; set; } = string.Empty;
-            public string Role { get; set; } = "Cardholder"; // 'HoldingAdmin', 'SubsidiaryAdmin', 'Cardholder'
-            public int OrganizationId { get; set; }
+            public string Role { get; set; } = "HoldingAdmin"; // 'HoldingAdmin', 'SubsidiaryAdmin', 'Cardholder'
+            public int? OrganizationId { get; set; }
+            public string CompanyName { get; set; } = string.Empty;
             public string FullName { get; set; } = string.Empty;
             public string Designation { get; set; } = string.Empty;
         }
@@ -83,42 +84,64 @@ namespace Cards.Api.Controllers
                 return BadRequest(new { error = "Email is already registered." });
             }
 
-            var orgExists = await _context.Organizations.AnyAsync(o => o.Id == request.OrganizationId);
-            if (!orgExists)
+            int organizationId;
+            string userRole = request.Role;
+
+            if (!string.IsNullOrWhiteSpace(request.CompanyName))
             {
-                return BadRequest(new { error = "Invalid OrganizationId." });
+                // Create a new parent organization
+                var org = new Organization
+                {
+                    Name = request.CompanyName.Trim(),
+                    ParentId = null
+                };
+                _context.Organizations.Add(org);
+                await _context.SaveChangesAsync();
+
+                organizationId = org.Id;
+                userRole = "HoldingAdmin"; // Auto-assign HoldingAdmin for new company signups
+            }
+            else
+            {
+                if (request.OrganizationId == null || request.OrganizationId <= 0)
+                {
+                    return BadRequest(new { error = "Company Name or an existing Organization selection is required." });
+                }
+                var orgExists = await _context.Organizations.AnyAsync(o => o.Id == request.OrganizationId.Value);
+                if (!orgExists)
+                {
+                    return BadRequest(new { error = "Invalid OrganizationId." });
+                }
+                organizationId = request.OrganizationId.Value;
             }
 
             var user = new User
             {
                 Email = request.Email,
                 PasswordHash = PasswordHasher.HashPassword(request.Password),
-                Role = request.Role,
-                OrganizationId = request.OrganizationId
+                Role = userRole,
+                OrganizationId = organizationId
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            // Auto-create a CardProfile if the user role is Cardholder
-            if (user.Role == "Cardholder")
+            // Auto-create a CardProfile for every registrant to avoid blank state
+            var uniqueToken = request.Email.Split('@')[0] + "-" + System.Guid.NewGuid().ToString().Substring(0, 4);
+            var cardProfile = new CardProfile
             {
-                var uniqueToken = request.Email.Split('@')[0] + "-" + System.Guid.NewGuid().ToString().Substring(0, 4);
-                var cardProfile = new CardProfile
-                {
-                    UserId = user.Id,
-                    NfcToken = uniqueToken,
-                    FullName = request.FullName,
-                    Designation = request.Designation,
-                    Email = request.Email,
-                    Phone = "",
-                    Bio = "",
-                    ProfileImageUrl = "",
-                    SocialLinksJson = "{}"
-                };
-                _context.CardProfiles.Add(cardProfile);
-                await _context.SaveChangesAsync();
-            }
+                UserId = user.Id,
+                NfcToken = uniqueToken,
+                FullName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName : request.Email.Split('@')[0],
+                Designation = request.Designation,
+                Email = request.Email,
+                Phone = "",
+                Bio = "",
+                ProfileImageUrl = "",
+                SocialLinksJson = "{}"
+            };
+            _context.CardProfiles.Add(cardProfile);
+            await _context.SaveChangesAsync();
 
             return StatusCode(201, new { message = "User registered successfully." });
         }

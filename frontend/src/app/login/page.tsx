@@ -35,6 +35,7 @@ export default function LoginPage() {
       localStorage.setItem("role", data.role);
       localStorage.setItem("email", data.email);
       localStorage.setItem("orgId", data.organizationId);
+      localStorage.setItem("organizationId", data.organizationId);
       localStorage.setItem("userId", data.userId);
       localStorage.setItem("fullName", data.fullName);
       localStorage.setItem("nfcToken", data.nfcToken || "");

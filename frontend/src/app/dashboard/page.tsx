@@ -42,6 +42,8 @@ interface CardProfile {
   bio: string;
   isActive: number;
   organizationName: string;
+  profileImageUrl?: string;
+  organizationId?: number;
 }
 
 interface Organization {
@@ -77,6 +79,10 @@ export default function DashboardPage() {
   const [newCardDesignation, setNewCardDesignation] = useState("");
   const [newCardNfcToken, setNewCardNfcToken] = useState("");
   const [newCardOrgId, setNewCardOrgId] = useState("");
+  const [newCardPhone, setNewCardPhone] = useState("");
+  const [newCardBio, setNewCardBio] = useState("");
+  const [newCardImage, setNewCardImage] = useState("");
+  const [editCardId, setEditCardId] = useState<number | null>(null);
   const [cardSuccess, setCardSuccess] = useState("");
   const [cardError, setCardError] = useState("");
   const [cardSaving, setCardSaving] = useState(false);
@@ -96,6 +102,14 @@ export default function DashboardPage() {
   const [orgError, setOrgError] = useState("");
   const [orgSaving, setOrgSaving] = useState(false);
 
+  // Parent Holding Company addition states
+  const [userOrgId, setUserOrgId] = useState<number | null>(null);
+  const [isAddingHolding, setIsAddingHolding] = useState(false);
+  const [holdingName, setHoldingName] = useState("");
+  const [holdingUrl, setHoldingUrl] = useState("");
+  const [holdingLogo, setHoldingLogo] = useState("");
+  const [holdingDesc, setHoldingDesc] = useState("");
+
   // Profile Editor (Self-Update) states
   const [profName, setProfName] = useState("");
   const [profTitle, setProfTitle] = useState("");
@@ -103,6 +117,7 @@ export default function DashboardPage() {
   const [profBio, setProfBio] = useState("");
   const [profLinkedIn, setProfLinkedIn] = useState("");
   const [profTwitter, setProfTwitter] = useState("");
+  const [profImage, setProfImage] = useState("");
   const [editorSuccess, setEditorSuccess] = useState("");
   const [editorError, setEditorError] = useState("");
   const [editorSaving, setEditorSaving] = useState(false);
@@ -113,6 +128,7 @@ export default function DashboardPage() {
     const savedRole = localStorage.getItem("role") || "";
     const savedName = localStorage.getItem("fullName") || "";
     const savedNfc = localStorage.getItem("nfcToken") || "";
+    const savedOrgId = localStorage.getItem("organizationId") || localStorage.getItem("orgId") || "";
 
     if (!savedToken) {
       router.push("/login");
@@ -124,6 +140,9 @@ export default function DashboardPage() {
     setRole(savedRole);
     setFullName(savedName);
     setNfcToken(savedNfc);
+    if (savedOrgId) {
+      setUserOrgId(parseInt(savedOrgId));
+    }
 
     // Fetch initial datasets
     fetchAnalytics(savedToken);
@@ -131,8 +150,8 @@ export default function DashboardPage() {
     fetchCards(savedToken);
     fetchOrgs(savedToken);
 
-    // If role is Cardholder, pre-fetch card details for self profile editor
-    if (savedRole === "Cardholder" && savedNfc) {
+    // Pre-fetch card details for self profile editor if they have a card profile token
+    if (savedNfc) {
       fetch(`${API_URL}/cards/${savedNfc}`)
         .then((res) => res.json())
         .then((data) => {
@@ -143,6 +162,7 @@ export default function DashboardPage() {
             setProfBio(data.profile.bio || "");
             setProfLinkedIn(data.profile.socialLinks?.LinkedIn || "");
             setProfTwitter(data.profile.socialLinks?.Twitter || "");
+            setProfImage(data.profile.profileImageUrl || "");
           }
         })
         .catch((err) => console.error(err));
@@ -237,34 +257,54 @@ export default function DashboardPage() {
     setCardSaving(true);
 
     try {
-      const res = await fetch(`${API_URL}/cards`, {
-        method: "POST",
+      const isEdit = editCardId !== null;
+      const url = isEdit ? `${API_URL}/cards/${editCardId}` : `${API_URL}/cards`;
+      const method = isEdit ? "PUT" : "POST";
+
+      const payload: any = {
+        email: newCardEmail,
+        fullName: newCardName,
+        designation: newCardDesignation,
+        nfcToken: newCardNfcToken,
+        phone: newCardPhone,
+        bio: newCardBio,
+        profileImageUrl: newCardImage,
+        organizationId: parseInt(newCardOrgId),
+      };
+
+      if (isEdit) {
+        payload.socialLinksJson = JSON.stringify({});
+      }
+
+      const res = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          email: newCardEmail,
-          fullName: newCardName,
-          designation: newCardDesignation,
-          nfcToken: newCardNfcToken,
-          organizationId: parseInt(newCardOrgId),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to provision card");
+        throw new Error(data.error || `Failed to ${isEdit ? "update" : "provision"} card`);
       }
 
-      setCardSuccess("NFC Card profile successfully created!");
+      setCardSuccess(isEdit ? "NFC Card profile successfully updated!" : "NFC Card profile successfully created!");
+      
+      // Clear form
       setNewCardEmail("");
       setNewCardName("");
       setNewCardDesignation("");
       setNewCardNfcToken("");
+      setNewCardPhone("");
+      setNewCardBio("");
+      setNewCardImage("");
+      setEditCardId(null);
+      
       fetchCards(token);
     } catch (err: unknown) {
-      setCardError(err instanceof Error ? err.message : "Failed to create card profile.");
+      setCardError(err instanceof Error ? err.message : "Failed to save card profile.");
     } finally {
       setCardSaving(false);
     }
@@ -315,6 +355,56 @@ export default function DashboardPage() {
     }
   };
 
+  const handleHoldingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOrgError("");
+    setOrgSuccess("");
+    setOrgSaving(true);
+
+    try {
+      const res = await fetch(`${API_URL}/organizations/add-parent-holding`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: holdingName,
+          websiteUrl: holdingUrl,
+          logoUrl: holdingLogo,
+          description: holdingDesc,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add holding company.");
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("organizationId", data.organizationId.toString());
+      setToken(data.token);
+      setUserOrgId(data.organizationId);
+
+      setOrgSuccess("Parent holding company added successfully! Your workspace token is updated.");
+      setHoldingName("");
+      setHoldingUrl("");
+      setHoldingLogo("");
+      setHoldingDesc("");
+      setIsAddingHolding(false);
+
+      // Re-fetch datasets under new context
+      fetchOrgs(data.token);
+      fetchCards(data.token);
+      fetchAnalytics(data.token);
+      fetchLeads(data.token);
+    } catch (err: unknown) {
+      setOrgError(err instanceof Error ? err.message : "Failed to add holding company.");
+    } finally {
+      setOrgSaving(false);
+    }
+  };
+
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditorError("");
@@ -339,7 +429,7 @@ export default function DashboardPage() {
           email,
           phone: profPhone,
           bio: profBio,
-          profileImageUrl: "",
+          profileImageUrl: profImage,
           socialLinksJson,
         }),
       });
@@ -560,8 +650,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Profile Editor for Cardholder role */}
-                {role === "Cardholder" ? (
+                {/* Profile Editor for users with an assigned NFC profile */}
+                {nfcToken ? (
                   <div className="glass p-6 rounded-2xl border border-zinc-800 space-y-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider text-zinc-400">
                       Customize Profile
@@ -577,6 +667,49 @@ export default function DashboardPage() {
                           {editorError}
                         </div>
                       )}
+                      {/* Profile Photo Upload */}
+                      <div className="flex flex-col items-center space-y-3 p-3 bg-zinc-900/30 rounded-xl border border-zinc-850/50">
+                        <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider self-start">Profile Photo</label>
+                        <div className="flex items-center space-x-4 w-full">
+                          <div className="w-16 h-16 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 overflow-hidden shadow-inner flex-shrink-0">
+                            {profImage ? (
+                              <img src={profImage} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-xl">👤</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col space-y-1.5 flex-1">
+                            <label className="cursor-pointer px-3 py-1.5 bg-indigo-600/90 hover:bg-indigo-600 text-white rounded-lg text-[10px] font-semibold transition text-center shadow-lg shadow-indigo-600/10">
+                              Choose Photo
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setProfImage(reader.result as string);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                            </label>
+                            {profImage && (
+                              <button
+                                type="button"
+                                onClick={() => setProfImage("")}
+                                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg text-[10px] font-semibold transition border border-zinc-700/50"
+                              >
+                                Remove Photo
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       <div>
                         <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Full Name</label>
                         <input
@@ -665,9 +798,11 @@ export default function DashboardPage() {
               {/* Card Provision Form (Only for Admins) */}
               {(role === "HoldingAdmin" || role === "SubsidiaryAdmin") ? (
                 <div className="glass p-6 rounded-2xl border border-zinc-800 h-fit space-y-4">
-                  <h3 className="text-lg font-bold text-white">Create NFC Card</h3>
+                  <h3 className="text-lg font-bold text-white">{editCardId ? "Edit NFC Card Profile" : "Create NFC Card"}</h3>
                   <p className="text-xs text-zinc-400">
-                    Register a new cardholder profile and assign its NFC token route URL.
+                    {editCardId 
+                      ? "Modify the existing cardholder profile details, phone number, and avatar image." 
+                      : "Register a new cardholder profile and assign its NFC token route URL."}
                   </p>
 
                   <form onSubmit={handleProvisionCard} className="space-y-3 pt-2">
@@ -681,6 +816,49 @@ export default function DashboardPage() {
                         {cardError}
                       </div>
                     )}
+
+                    {/* Admin Profile Photo Upload */}
+                    <div className="flex flex-col items-center space-y-3 p-3 bg-zinc-900/30 rounded-xl border border-zinc-850/50">
+                      <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider self-start">Profile Photo</label>
+                      <div className="flex items-center space-x-4 w-full">
+                        <div className="w-14 h-14 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 overflow-hidden shadow-inner flex-shrink-0">
+                          {newCardImage ? (
+                            <img src={newCardImage} alt="Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-lg">👤</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col space-y-1 w-full">
+                          <label className="cursor-pointer px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-semibold transition text-center shadow-lg shadow-indigo-600/10">
+                            Upload Photo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setNewCardImage(reader.result as string);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          {newCardImage && (
+                            <button
+                              type="button"
+                              onClick={() => setNewCardImage("")}
+                              className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded text-[10px] font-semibold transition border border-zinc-700/50"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
                     <div>
                       <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -739,6 +917,33 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Mobile Phone
+                        </label>
+                        <input
+                          type="text"
+                          value={newCardPhone}
+                          onChange={(e) => setNewCardPhone(e.target.value)}
+                          placeholder="+27 82 123 4567"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Bio Statement
+                        </label>
+                        <input
+                          type="text"
+                          value={newCardBio}
+                          onChange={(e) => setNewCardBio(e.target.value)}
+                          placeholder="Brief bio..."
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
                         Company / Organization
@@ -756,13 +961,36 @@ export default function DashboardPage() {
                       </select>
                     </div>
 
-                    <button
-                      type="submit"
-                      disabled={cardSaving}
-                      className="w-full mt-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-lg text-white transition"
-                    >
-                      {cardSaving ? "Provisioning..." : "Provision NFC Card Profile"}
-                    </button>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="submit"
+                        disabled={cardSaving}
+                        className="flex-1 mt-2 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-lg text-white transition"
+                      >
+                        {cardSaving ? "Saving..." : (editCardId ? "Save Changes" : "Provision NFC Card Profile")}
+                      </button>
+                      {editCardId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCardId(null);
+                            setNewCardEmail("");
+                            setNewCardName("");
+                            setNewCardDesignation("");
+                            setNewCardNfcToken("");
+                            setNewCardPhone("");
+                            setNewCardBio("");
+                            setNewCardImage("");
+                            if (organizations.length > 0) {
+                              setNewCardOrgId(organizations[0].id.toString());
+                            }
+                          }}
+                          className="mt-2 py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold rounded-lg text-zinc-300 hover:text-white transition border border-zinc-700/50"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   </form>
                 </div>
               ) : (
@@ -790,7 +1018,8 @@ export default function DashboardPage() {
                         <th className="py-3 px-4">Email</th>
                         <th className="py-3 px-4">NFC Token</th>
                         <th className="py-3 px-4">Company</th>
-                        <th className="py-3 px-4 text-right">Status</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -806,7 +1035,7 @@ export default function DashboardPage() {
                               </span>
                             </td>
                             <td className="py-3 px-4">{cp.organizationName}</td>
-                            <td className="py-3 px-4 text-right">
+                            <td className="py-3 px-4 text-center">
                               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                                 cp.isActive === 1 
                                   ? "bg-green-950/40 border border-green-800 text-green-400"
@@ -815,11 +1044,31 @@ export default function DashboardPage() {
                                 {cp.isActive === 1 ? "Active" : "Inactive"}
                               </span>
                             </td>
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => {
+                                  setEditCardId(cp.profileId);
+                                  setNewCardEmail(cp.email || "");
+                                  setNewCardName(cp.fullName || "");
+                                  setNewCardDesignation(cp.designation || "");
+                                  setNewCardNfcToken(cp.nfcToken || "");
+                                  setNewCardPhone(cp.phone || "");
+                                  setNewCardBio(cp.bio || "");
+                                  setNewCardImage(cp.profileImageUrl || "");
+                                  if (cp.organizationId) {
+                                    setNewCardOrgId(cp.organizationId.toString());
+                                  }
+                                }}
+                                className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 hover:text-indigo-300 rounded font-semibold text-[10px] transition border border-indigo-500/20"
+                              >
+                                Edit
+                              </button>
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-zinc-500">
+                          <td colSpan={7} className="py-8 text-center text-zinc-500">
                             No profiles provisioned.
                           </td>
                         </tr>
@@ -911,16 +1160,27 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Form Config Add/Edit */}
               <div className="glass rounded-2xl border border-zinc-800 p-6 space-y-6 h-fit">
-                <div>
-                  <h3 className="text-base font-bold text-white">
-                    {editOrgId ? "Edit Subsidiary" : "Add Subsidiary"}
-                  </h3>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Manage other subsidiary companies displayed as sister groups.
-                  </p>
-                </div>
+                {isAddingHolding ? (
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      Add Parent Holding Company
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Group this company and all its subsidiaries under a new corporate holdings namespace.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {editOrgId ? "Edit Subsidiary" : "Add Subsidiary"}
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Manage other subsidiary companies displayed as sister groups.
+                    </p>
+                  </div>
+                )}
 
-                <form onSubmit={handleOrgSubmit} className="space-y-4">
+                <form onSubmit={isAddingHolding ? handleHoldingSubmit : handleOrgSubmit} className="space-y-4">
                   {orgSuccess && (
                     <div className="p-3 text-xs text-green-200 bg-green-950/40 border border-green-800 rounded-lg">
                       {orgSuccess}
@@ -932,57 +1192,115 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-                      Subsidiary Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={orgName}
-                      onChange={(e) => setOrgName(e.target.value)}
-                      placeholder="e.g. Comzera Solutions"
-                      className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-                      Website URL
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      value={orgUrl}
-                      onChange={(e) => setOrgUrl(e.target.value)}
-                      placeholder="https://solutions.comzera.co.za"
-                      className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-                      Logo Path or Image URL
-                    </label>
-                    <input
-                      type="text"
-                      value={orgLogo}
-                      onChange={(e) => setOrgLogo(e.target.value)}
-                      placeholder="/assets/logos/solutions.png"
-                      className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-                      Description
-                    </label>
-                    <textarea
-                      required
-                      value={orgDesc}
-                      onChange={(e) => setOrgDesc(e.target.value)}
-                      placeholder="Brief capability description..."
-                      rows={3}
-                      className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
-                    ></textarea>
-                  </div>
+                  {isAddingHolding ? (
+                    <>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Holding Company Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={holdingName}
+                          onChange={(e) => setHoldingName(e.target.value)}
+                          placeholder="e.g. Acme Holdings"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Website URL
+                        </label>
+                        <input
+                          type="url"
+                          required
+                          value={holdingUrl}
+                          onChange={(e) => setHoldingUrl(e.target.value)}
+                          placeholder="https://acmeholdings.com"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Logo Path or Image URL
+                        </label>
+                        <input
+                          type="text"
+                          value={holdingLogo}
+                          onChange={(e) => setHoldingLogo(e.target.value)}
+                          placeholder="/assets/logos/holdings.png"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Description
+                        </label>
+                        <textarea
+                          required
+                          value={holdingDesc}
+                          onChange={(e) => setHoldingDesc(e.target.value)}
+                          placeholder="Corporate holding group description..."
+                          rows={3}
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        ></textarea>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Subsidiary Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                          placeholder="e.g. Comzera Solutions"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Website URL
+                        </label>
+                        <input
+                          type="url"
+                          required
+                          value={orgUrl}
+                          onChange={(e) => setOrgUrl(e.target.value)}
+                          placeholder="https://solutions.comzera.co.za"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Logo Path or Image URL
+                        </label>
+                        <input
+                          type="text"
+                          value={orgLogo}
+                          onChange={(e) => setOrgLogo(e.target.value)}
+                          placeholder="/assets/logos/solutions.png"
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Description
+                        </label>
+                        <textarea
+                          required
+                          value={orgDesc}
+                          onChange={(e) => setOrgDesc(e.target.value)}
+                          placeholder="Brief capability description..."
+                          rows={3}
+                          className="mt-1 block w-full px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-lg text-xs text-white focus:outline-none"
+                        ></textarea>
+                      </div>
+                    </>
+                  )}
 
                   <div className="flex gap-2">
                     <button
@@ -990,7 +1308,7 @@ export default function DashboardPage() {
                       disabled={orgSaving}
                       className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-lg text-white transition disabled:opacity-50"
                     >
-                      {orgSaving ? "Saving..." : editOrgId ? "Update Info" : "Save Subsidiary"}
+                      {orgSaving ? "Saving..." : isAddingHolding ? "Save Holding Group" : editOrgId ? "Update Info" : "Save Subsidiary"}
                     </button>
                     {editOrgId && (
                       <button
@@ -1003,12 +1321,38 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </form>
+
+                {/* Toggle option between adding subsidiary and adding holding company */}
+                {(() => {
+                  const currentUserOrg = organizations.find((o) => o.id === userOrgId);
+                  const showHoldingOption = currentUserOrg && currentUserOrg.parentId === null;
+                  if (showHoldingOption && !editOrgId) {
+                    return (
+                      <div className="pt-4 text-center border-t border-zinc-850">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingHolding(!isAddingHolding);
+                            setOrgError("");
+                            setOrgSuccess("");
+                          }}
+                          className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition"
+                        >
+                          {isAddingHolding
+                            ? "← Manage Subsidiaries"
+                            : "Need a parent holding company? Add one →"}
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
-              {/* Subsidiaries List */}
+              {/* Group Companies List */}
               <div className="glass rounded-2xl border border-zinc-800 p-6 lg:col-span-2 space-y-4">
                 <h3 className="text-base font-bold text-white uppercase tracking-wider text-zinc-400">
-                  Registered subsidiaries
+                  Registered companies & subsidiaries
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1026,7 +1370,14 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-white truncate">{org.name}</h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-xs font-bold text-white truncate">{org.name}</h4>
+                            {org.parentId === null && (
+                              <span className="px-1.5 py-0.5 text-[8px] bg-purple-900/50 border border-purple-800/80 text-purple-300 rounded font-bold uppercase tracking-wider">
+                                Holding
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-zinc-400 mt-1 line-clamp-2">{org.description}</p>
                         </div>
                       </div>
@@ -1040,7 +1391,10 @@ export default function DashboardPage() {
                           Visit website ↗
                         </a>
                         <button
-                          onClick={() => handleEditOrgClick(org)}
+                          onClick={() => {
+                            setIsAddingHolding(false);
+                            handleEditOrgClick(org);
+                          }}
                           className="text-[10px] text-zinc-300 hover:text-white border border-zinc-800 px-2.5 py-1 rounded bg-zinc-900/50 hover:bg-zinc-900 transition"
                         >
                           Edit
