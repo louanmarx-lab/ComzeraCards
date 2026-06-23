@@ -11,7 +11,7 @@ RUN dotnet publish "Cards.Api.csproj" -c Release -o /app/publish /p:UseAppHost=f
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENV ASPNETCORE_URLS=http://+:5001
+ENV ASPNETCORE_URLS=http://+:80
 ENV ASPNETCORE_ENVIRONMENT=Production
-EXPOSE 5001
+EXPOSE 80
 ENTRYPOINT ["dotnet", "Cards.Api.dll"]
