@@ -261,7 +261,7 @@ export default function DashboardPage() {
       const url = isEdit ? `${API_URL}/cards/${editCardId}` : `${API_URL}/cards`;
       const method = isEdit ? "PUT" : "POST";
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         email: newCardEmail,
         fullName: newCardName,
         designation: newCardDesignation,

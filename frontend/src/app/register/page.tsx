@@ -2,15 +2,10 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "@/config";
-
-interface Organization {
-  id: number;
-  name: string;
-}
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
